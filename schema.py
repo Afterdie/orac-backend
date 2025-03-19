@@ -70,3 +70,8 @@ class TableSchema(BaseModel):
     columns: List[ColumnSchema]
     foreign_keys: List[ForeignKeySchema]
     relationships: List[RelationshipSchema]
+
+def get_types(connection_string:str):
+    engine = create_engine(connection_string)
+    dialect = engine.dialect
+    return dialect.type_compiler.standard_types

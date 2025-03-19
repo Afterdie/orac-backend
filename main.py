@@ -60,13 +60,12 @@ from schema import TableSchema
 def getschema(request: ValidateRequest):
     return get_schema(request.connection_string)
 
+from docs import gen_docs
 class DocsRequest(BaseModel):
-    connection_string: str
-    schema: Optional[Dict[str, TableSchema]] = None
+    connection_string: Optional[str]
+    db_schema: Optional[Dict[str, TableSchema]]
 
-# from docs import generateDocs
-
-# @app.post("/gen/docs")
-# def genDocs(request: DocsRequest):
-#     try:
-#         generateDocs(request)    
+@app.post("/gen/docs")
+def genDocs(request: DocsRequest):
+    print(request)
+    return gen_docs(request.connection_string, request.db_schema)
