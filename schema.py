@@ -20,10 +20,16 @@ class RelationshipSchema(BaseModel):
     to_table: str
     to_columns: List[str]
 
+class IndexSchema(BaseModel):
+    name: str
+    columns: List[str]
+    unique: bool
+
 class TableSchema(BaseModel):
     columns: List[ColumnSchema]
     foreign_keys: List[ForeignKeySchema]
     relationships: List[RelationshipSchema]
+    indexes: List[IndexSchema]
 
 class ColumnStats(BaseModel):
     name: str
@@ -35,14 +41,14 @@ class TableStats(BaseModel):
     row_count: int
     column_stats: List[ColumnStats]
 
-#separate utility fn
-def get_schema(connection_string:str):
+# Separate utility function
+def get_schema(connection_string: str):
     if not connection_string:
-        return {"success":False, "message": "Invalid connection string"}
+        return {"success": False, "message": "Invalid connection string"}
     try:
         engine = create_engine(connection_string)
-        schema = get_db_schema(engine)
-        return {"success": True, "schema": schema}
+        schema, stats = get_db_schema(engine)
+        return {"success": True, "schema": schema, "stats": stats}
     except SQLAlchemyError as e:
         return {"success": False, "message": str(e)}
 
@@ -55,7 +61,8 @@ def get_db_schema(engine) -> Tuple[Dict[str, TableSchema], Dict[str, TableStats]
         schema[table] = {
             "columns": [],
             "foreign_keys": [],
-            "relationships": []
+            "relationships": [],
+            "indexes": [],
         }
 
         # Extract columns
@@ -80,6 +87,14 @@ def get_db_schema(engine) -> Tuple[Dict[str, TableSchema], Dict[str, TableStats]
                 "referenced_column": fk["referred_columns"]
             })
             schema[table]["relationships"].append(relationship)
+
+        # Extract indexes
+        for index in inspector.get_indexes(table):
+            schema[table]["indexes"].append({
+                "name": index["name"],
+                "columns": index["column_names"],
+                "unique": index.get("unique", False)  # Some DBs might not have 'unique' field
+            })
 
         # Fetch row count & cardinality
         stats[table] = get_stats(engine, table)

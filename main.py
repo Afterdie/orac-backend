@@ -8,6 +8,7 @@ import logging
 from contextlib import asynccontextmanager
 from docs import gen_docs
 from logger import after_execute, before_execute
+from chat import get_reply
 
 
 app = FastAPI()
@@ -32,8 +33,6 @@ QUERY_LOG = {}
 def get_engine(connection_string: str):
     if connection_string not in ENGINE_CACHE:
         engine = create_engine(connection_string, pool_size=5, max_overflow=10)
-        event.listen(engine, "before_execute", before_execute)
-        event.listen(engine, "after_execute", after_execute)
         ENGINE_CACHE[connection_string] = engine
     return ENGINE_CACHE[connection_string]
 
@@ -53,6 +52,9 @@ def validate_connection(request: ValidateRequest):
 
             # Temporary solution (replace with Redis later)
             SCHEMA_STORAGE[request.connection_string] = schema
+            #binding after schema because it runs a huge query and it sends through a wall of text QOL change 
+            event.listen(engine, "before_execute", before_execute)
+            event.listen(engine, "after_execute", after_execute)
 
         return {"success": True, "schema": schema}
     except SQLAlchemyError as e:
@@ -99,6 +101,25 @@ def genDocs(request: DocsRequest):
         return gen_docs(schema)
     except:
         return {"Success": False, "message":"Failed to generate docs"}
+
+class ChatRequest(BaseModel):
+    userInput: str
+    query: Optional[str]
+    connection_string: Optional[str]
+    schema: Optional[Tuple[Dict[str, TableSchema], Dict[str, TableStats]]]
+
+@app.post("/chat")
+def getReply(request: ChatRequest):
+    userInput = request.userInput
+    query = request.query
+    connection_string = request.connection_string
+    schema = request.schema
+    if not connection_string and not schema:
+        return {"success": False, "message":"Not enough data"}
+    try:
+        return get_reply(userInput, query, schema or SCHEMA_STORAGE.get(connection_string))
+    except:
+        return {"success": False, "message":"Something went wrong"}
 
 #need to test this what does bro even do
 @asynccontextmanager
