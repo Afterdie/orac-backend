@@ -98,7 +98,7 @@ def get_db_metadata(engine) -> Metadata:
         # Fetch row count & cardinality
         stats[table] = get_stats(engine, table)
 
-    return schema, stats
+    return {"schema": schema, "stats":stats}
 
 
 def get_stats(engine, table_name):

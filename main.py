@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from docs import gen_docs
 from logger import after_execute, before_execute
 from chat import get_reply
-from schema import get_db_metadata, Metadata
+from schema import get_db_metadata, Metadata, TableSchema
 import json
 
 
@@ -50,7 +50,7 @@ def validate_connection(request: ValidateRequest):
 
             #includes the schema of the table and the extra stats
             metadata = get_db_metadata(engine)
-
+            print (metadata)
             # Temporary solution (replace with Redis later)
             METADATA_STORAGE[request.connection_string] = metadata
             #binding after schema because it runs a huge query and it sends through a wall of text QOL change 
@@ -93,15 +93,16 @@ def getschema(request: ValidateRequest):
         return {"success": False, "message": "Failed to get schema"}
 class DocsRequest(BaseModel):
     connection_string: Optional[str]
-    db_schema: Optional[Metadata]
+    schema: Optional[Dict[str, TableSchema]]
 
 @app.post("/gen/docs")
 def genDocs(request: DocsRequest):
-    try:
-        metadata = METADATA_STORAGE[request.connection_string]
-        return gen_docs(metadata.schema)
-    except:
-        return {"Success": False, "message":"Failed to generate docs"}
+    connection_string = request.connection_string
+    schema = request.schema
+    if not connection_string and not schema:
+        return {"success": False, "message": "Field connection_string or schema is missing"}
+    #need some better edge case handling here in case metadata.get() returns None
+    return gen_docs(schema or METADATA_STORAGE.get(connection_string).get("schema"))
 
 class ChatRequest(BaseModel):
     userInput: str
