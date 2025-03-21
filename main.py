@@ -7,6 +7,7 @@ from typing import Dict, AsyncGenerator, Optional
 import logging
 from contextlib import asynccontextmanager
 
+from nlp2sql import get_sql
 from docs import gen_docs
 from logger import after_execute, before_execute
 from chat import get_reply
@@ -91,6 +92,24 @@ def getschema(request: ValidateRequest):
         return {"success":True, "data": metadata.schema}
     except:
         return {"success": False, "message": "Failed to get schema"}
+
+class NLPRequest(BaseModel):
+    description: str
+    connection_string: Optional[str]
+    schema: Optional[Dict[str, TableSchema]]
+
+@app.post("/nlp2sql")
+def getSQL(request: NLPRequest):
+    description = request.description
+    connection_string = request.connection_string
+    schema = request.schema
+    if not schema:
+        schema = METADATA_STORAGE.get(connection_string)
+        if not schema:
+            return {"success": False, "message": "Try connecting to your database again"}
+        schema = schema.get("schema")
+    return get_sql(description, schema)
+
 class DocsRequest(BaseModel):
     connection_string: Optional[str]
     schema: Optional[Dict[str, TableSchema]]

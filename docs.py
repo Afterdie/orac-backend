@@ -30,7 +30,6 @@ block_note_block_types = [
 ]
 
 def gen_docs(schema: Dict[str, TableSchema]):
-    print(schema)
     prompt = f"""
     You are an AI specialized in generating structured database documentation in strict compliance with the BlockNote block format. Your task is to produce industry-standard documentation explaining all fields of the table and general information, while adhering to the provided database schema, and explicitly allowed block types. Also include a few sample queries in the code block for each table and write the explanations for these queries in a paragraph block. When you wish to add a gap between two topics and two SQL queries, simply use an empty paragraph block.
 
