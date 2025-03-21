@@ -1,10 +1,10 @@
-from typing import Optional, Dict, Tuple, Any
+from typing import Optional, Dict, Any
 import json
 from aiAPI import generateResponse
-from schema import TableSchema, TableStats
+from schema import Metadata
 
-def get_reply(userInput: str, query: Optional[str], schema: Tuple[Dict[str, TableSchema], Dict[str, TableStats]]) -> Dict[str, Any]:
-    schema = json.dumps(schema, indent=2)
+def get_reply(userInput: str, query: Optional[str], metadata: Metadata) -> Dict[str, Any]:
+    metadata = json.dumps(metadata, indent=2)
     prompt = f"""
     You are an SQL assistant named Oraca specialized in SQLite. You must always respond in JSON format with two fields:
     - "message": A clear and concise explanation, modification, or response to the user's request.
@@ -12,7 +12,7 @@ def get_reply(userInput: str, query: Optional[str], schema: Tuple[Dict[str, Tabl
     
     ## Context:
     - Database schema:
-      {schema}
+      {metadata}
     - Always use SQLite syntax.
     - If the query references nonexistent tables or columns, inform the user instead of assuming.
     - Ensure queries are correct, efficient, and safe.
@@ -36,7 +36,6 @@ def get_reply(userInput: str, query: Optional[str], schema: Tuple[Dict[str, Tabl
     - User Query: {query if query else 'N/A'}
     - User Request: {userInput}
     """
-
     try:
         result = generateResponse(prompt).text
         result = result.strip().strip("`")
@@ -44,7 +43,7 @@ def get_reply(userInput: str, query: Optional[str], schema: Tuple[Dict[str, Tabl
             result = result[4:].strip()
         
         cleaned_json = json.loads(result)
-        return {"success": True, "response": cleaned_json}
+        return {"success": True, "data": cleaned_json}
     except json.JSONDecodeError:
         return {"success": False, "message": "Failed to parse JSON response"}
     except Exception as e:

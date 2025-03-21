@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, inspect, text, Engine
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 
 class ColumnSchema(BaseModel):
@@ -31,15 +31,13 @@ class TableSchema(BaseModel):
     relationships: List[RelationshipSchema]
     indexes: List[IndexSchema]
 
-class ColumnStats(BaseModel):
-    name: str
-    cardinality: float  # Percentage of unique values (0.0 - 1.0)
-
-
 class TableStats(BaseModel):
-    table_name: str
     row_count: int
-    column_stats: List[ColumnStats]
+    cardinality: Dict[str, float]
+
+class Metadata(BaseModel):
+    schema: Dict[str, TableSchema]
+    stats: Dict[str, TableStats]
 
 # Separate utility function
 def get_schema(connection_string: str):
@@ -47,12 +45,13 @@ def get_schema(connection_string: str):
         return {"success": False, "message": "Invalid connection string"}
     try:
         engine = create_engine(connection_string)
-        schema, stats = get_db_schema(engine)
-        return {"success": True, "schema": schema, "stats": stats}
+        metadata = get_db_metadata(engine)
+        return {"success": True, "data": metadata}
     except SQLAlchemyError as e:
         return {"success": False, "message": str(e)}
 
-def get_db_schema(engine) -> Tuple[Dict[str, TableSchema], Dict[str, TableStats]]:
+#metadata is schema + stats
+def get_db_metadata(engine) -> Metadata:
     inspector = inspect(engine)
     schema = {}
     stats = {}

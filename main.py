@@ -3,12 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text, Engine, event
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel
-from typing import Dict, AsyncGenerator, Optional, Tuple
+from typing import Dict, AsyncGenerator, Optional
 import logging
 from contextlib import asynccontextmanager
+
 from docs import gen_docs
 from logger import after_execute, before_execute
 from chat import get_reply
+from schema import get_db_metadata, Metadata
+import json
 
 
 app = FastAPI()
@@ -22,10 +25,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from schema import get_db_schema, TableSchema, TableStats
-
 # Temporary database
-SCHEMA_STORAGE: Dict[str, Tuple[Dict[str, TableSchema], Dict[str, TableStats]]] = {}
+METADATA_STORAGE: Dict[str, Metadata] = {}
 ENGINE_CACHE: Dict[str, Engine] = {}
 QUERY_LOG = {}
 
@@ -48,15 +49,15 @@ def validate_connection(request: ValidateRequest):
             connection.execute(text("SELECT 1"))
 
             #includes the schema of the table and the extra stats
-            schema = get_db_schema(engine)
+            metadata = get_db_metadata(engine)
 
             # Temporary solution (replace with Redis later)
-            SCHEMA_STORAGE[request.connection_string] = schema
+            METADATA_STORAGE[request.connection_string] = metadata
             #binding after schema because it runs a huge query and it sends through a wall of text QOL change 
             event.listen(engine, "before_execute", before_execute)
             event.listen(engine, "after_execute", after_execute)
 
-        return {"success": True, "schema": schema}
+        return {"success": True, "data": metadata}
     except SQLAlchemyError as e:
         return {"success": False, "message": str(e)}
 
@@ -86,19 +87,19 @@ def execute_query(request: QueryRequest):
 @app.post("/get_schema/")
 def getschema(request: ValidateRequest):
     try:
-        schema = SCHEMA_STORAGE[request.connection_string]
-        return {"success":True, "schema": schema}
+        metadata = METADATA_STORAGE[request.connection_string]
+        return {"success":True, "data": metadata.schema}
     except:
         return {"success": False, "message": "Failed to get schema"}
 class DocsRequest(BaseModel):
     connection_string: Optional[str]
-    db_schema: Optional[Dict[str, TableSchema]]
+    db_schema: Optional[Metadata]
 
 @app.post("/gen/docs")
 def genDocs(request: DocsRequest):
     try:
-        schema = SCHEMA_STORAGE[request.connection_string]
-        return gen_docs(schema)
+        metadata = METADATA_STORAGE[request.connection_string]
+        return gen_docs(metadata.schema)
     except:
         return {"Success": False, "message":"Failed to generate docs"}
 
@@ -106,20 +107,20 @@ class ChatRequest(BaseModel):
     userInput: str
     query: Optional[str]
     connection_string: Optional[str]
-    schema: Optional[Tuple[Dict[str, TableSchema], Dict[str, TableStats]]]
+    metadata: Optional[Metadata]
 
 @app.post("/chat")
 def getReply(request: ChatRequest):
     userInput = request.userInput
     query = request.query
     connection_string = request.connection_string
-    schema = request.schema
-    if not connection_string and not schema:
+    metadata = request.metadata
+    if metadata:
+        #done because its not json serilizable by default and contains pydantic models
+        metadata = metadata.model_dump()
+    if not connection_string and not metadata:
         return {"success": False, "message":"Not enough data"}
-    try:
-        return get_reply(userInput, query, schema or SCHEMA_STORAGE.get(connection_string))
-    except:
-        return {"success": False, "message":"Something went wrong"}
+    return get_reply(userInput, query, metadata or METADATA_STORAGE.get(connection_string))
 
 #need to test this what does bro even do
 @asynccontextmanager
