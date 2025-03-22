@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Dict, AsyncGenerator, Optional
 import logging
 from contextlib import asynccontextmanager
-
+import time
 from nlp2sql import get_sql
 from docs import gen_docs
 from logger import after_execute, before_execute
@@ -66,6 +66,7 @@ class QueryRequest(BaseModel):
     connection_string: str
     query: str
 
+#move this to its own file later
 @app.post("/execute_query/")
 def execute_query(request: QueryRequest):
     try:
@@ -73,11 +74,13 @@ def execute_query(request: QueryRequest):
 
         with engine.connect() as connection:
             with connection.begin():  # Begin transaction for all queries
+                start_time = time.perf_counter()
                 result = connection.execute(text(request.query))
+                duration = time.perf_counter()-start_time
 
             if result.returns_rows:
                 data = [dict(row) for row in result.mappings()]
-                return {"success": True, "data": data}
+                return {"success": True, "data": data, "duration": duration}
 
         return {"success": True, "message": "Query executed successfully"}
 
