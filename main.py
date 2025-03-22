@@ -7,10 +7,12 @@ from typing import Dict, AsyncGenerator, Optional
 import logging
 from contextlib import asynccontextmanager
 import time
+from execute import execute_query
 from nlp2sql import get_sql
 from docs import gen_docs
 from logger import after_execute, before_execute
 from chat import get_reply
+from graph import get_graph
 from schema import get_db_metadata, Metadata, TableSchema
 import json
 
@@ -68,22 +70,17 @@ class QueryRequest(BaseModel):
 
 #move this to its own file later
 @app.post("/execute_query/")
-def execute_query(request: QueryRequest):
+def executeQuery(request: QueryRequest):
+    connection_string = request.connection_string
+    query = request.query
+
+    if not connection_string or not query:
+        return {"success": False, "message": "Connection string or Query is missing"}
+
     try:
-        engine = get_engine(request.connection_string)
-
-        with engine.connect() as connection:
-            with connection.begin():  # Begin transaction for all queries
-                start_time = time.perf_counter()
-                result = connection.execute(text(request.query))
-                duration = time.perf_counter()-start_time
-
-            if result.returns_rows:
-                data = [dict(row) for row in result.mappings()]
-                return {"success": True, "data": data, "duration": duration}
-
-        return {"success": True, "message": "Query executed successfully"}
-
+        engine = get_engine(connection_string)
+        with engine.connect() as connection:  # Ensure proper connection handling
+            return execute_query(connection, query)
     except SQLAlchemyError as e:
         return {"success": False, "message": str(e)}
 
@@ -144,6 +141,24 @@ def getReply(request: ChatRequest):
     if not connection_string and not metadata:
         return {"success": False, "message":"Not enough data"}
     return get_reply(userInput, query, metadata or METADATA_STORAGE.get(connection_string))
+
+@app.post("/graph")
+def getGraph(request: ChatRequest):
+    userInput = request.userInput
+    query = request.query
+    connection_string = request.connection_string
+    metadata = request.metadata
+    if metadata:
+        #done because its not json serilizable by default and contains pydantic models
+        metadata = metadata.model_dump()
+    if not connection_string and not metadata:
+        return {"success": False, "message":"Not enough data"}
+    try:
+        engine = get_engine(connection_string)
+        with engine.connect() as connection:  # Ensure proper connection handling
+            return get_graph(userInput, query, metadata or METADATA_STORAGE.get(connection_string), connection)
+    except SQLAlchemyError as e:
+        return {"success": False, "message": str(e)}
 
 #need to test this what does bro even do
 @asynccontextmanager
