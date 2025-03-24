@@ -43,6 +43,10 @@ def get_engine(connection_string: str):
 class ValidateRequest(BaseModel):
     connection_string: str
 
+@app.post("/health")
+def health():
+    return {"message":"working and stuff"}
+
 @app.post("/validate_connection/")
 def validate_connection(request: ValidateRequest):
     try:

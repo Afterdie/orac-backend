@@ -4,7 +4,7 @@ from aiAPI import generateResponse
 
 def get_sql(description: str, schema: Dict[str, TableSchema]):
     prompt = f"""
-    You are an AI specialized in converting natural language to strict SQLite queries.
+    You are an AI specialized in converting natural language to strict SQL queries.
 
     Database Schema:
     {schema}
