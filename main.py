@@ -114,7 +114,7 @@ class DocsRequest(BaseModel):
     connection_string: Optional[str]
     schema: Optional[Dict[str, TableSchema]]
 
-@app.post("/gen/docs")
+@app.post("/docs")
 def genDocs(request: DocsRequest):
     connection_string = request.connection_string
     schema = request.schema
