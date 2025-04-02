@@ -24,6 +24,59 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
+# Routes
+## /validate_connection
+Client passes a connection string for the database that is verified by the server by running a dummy query
+```
+connection_string: str
+```
+
+## /execute_query
+Accepts the query to be executed on the db.
+```
+connection_string: str
+query: str
+```
+
+## /get_schema
+Utility function gets the metadata(schema+stats) mapped to the connection_string.
+```
+connection_string: str
+```
+
+## /nlp2sql
+Accepts the natural language effect they desire on the db, connection_string if online execution or schema if local db.
+```
+description: str
+connection_string: Optional[str]
+schema: Optional[Dict[str, TableSchema]]
+```
+
+## /docs
+Accepts the connection_string if online connection or the schema if local db
+```
+connection_string: Optional[str]
+schema: Optional[Dict[str, TableSchema]]
+```
+
+## /chat
+Accepts user prompt and query if included and returns a response based on the metadata provided to it.
+```
+userInput: str
+query: Optional[str]
+connection_string: Optional[str]
+metadata: Optional[Metadata]
+```
+
+## /graph
+Accepts the user prompt and query if included and returns a response that included the graph type and the data for it based on the metadata and prompt provided to it.
+```
+userInput: str
+query: Optional[str]
+connection_string: Optional[str]
+metadata: Optional[Metadata]
+```
+
 fields used for index decision making
 
 - query execution time
