@@ -1,11 +1,17 @@
 ﻿# orac-backend
 
-## Steps to install
+## Getting Started
 
 Preferably create a virtual environment.
 ```
 cd oraca-backend
 venv/Scripts/Activate
+```
+
+## Add your Gemini API key
+Create a .env in the root of the project and add the following fiels
+```
+GEMINI_API_KEY=your_api_key_here
 ```
 
 ## Installing dependencies
