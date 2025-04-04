@@ -1,21 +1,23 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, text, Engine, event
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel
-from typing import Dict, AsyncGenerator, Optional
-import logging
-from contextlib import asynccontextmanager
-import time
+from typing import Dict, Optional
 from execute import execute_query
 from nlp2sql import get_sql
+from engine import validate_connection, get_engine, get_db_metadata
 from docs import gen_docs
-from logger import after_execute, before_execute
 from chat import get_reply
 from graph import get_graph
-from schema import get_db_metadata, Metadata, TableSchema
-import json
+from schema import Metadata, TableSchema
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
+def dev_print(*args, **kwargs):
+    if DEV_MODE:
+        print(*args, **kwargs)
 
 app = FastAPI()
 
@@ -28,18 +30,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Temporary database
-METADATA_STORAGE: Dict[str, Metadata] = {}
-ENGINE_CACHE: Dict[str, Engine] = {}
-QUERY_LOG = {}
-
-# Function to get or create an engine
-def get_engine(connection_string: str):
-    if connection_string not in ENGINE_CACHE:
-        engine = create_engine(connection_string, pool_size=5, max_overflow=10)
-        ENGINE_CACHE[connection_string] = engine
-    return ENGINE_CACHE[connection_string]
-
 class ValidateRequest(BaseModel):
     connection_string: str
 
@@ -48,25 +38,13 @@ def health():
     return {"message":"working and stuff"}
 
 @app.post("/validate_connection/")
-def validate_connection(request: ValidateRequest):
-    try:
-        engine = get_engine(request.connection_string)
+def validateConnection(request: ValidateRequest):
 
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-
-            #includes the schema of the table and the extra stats
-            metadata = get_db_metadata(engine)
-            print (metadata)
-            # Temporary solution (replace with Redis later)
-            METADATA_STORAGE[request.connection_string] = metadata
-            #binding after schema because it runs a huge query and it sends through a wall of text QOL change 
-            event.listen(engine, "before_execute", before_execute)
-            event.listen(engine, "after_execute", after_execute)
-
-        return {"success": True, "data": metadata}
-    except SQLAlchemyError as e:
-        return {"success": False, "message": str(e)}
+    connection_string = request.connection_string
+    if not connection_string:
+        return {"success": False, "message":"Connection string is empty"}
+    
+    return validate_connection(connection_string)
 
 class QueryRequest(BaseModel):
     connection_string: str
@@ -81,51 +59,34 @@ def executeQuery(request: QueryRequest):
     if not connection_string or not query:
         return {"success": False, "message": "Connection string or Query is missing"}
 
-    try:
-        engine = get_engine(connection_string)
-        with engine.connect() as connection:  # Ensure proper connection handling
-            return execute_query(connection, query)
-    except SQLAlchemyError as e:
-        return {"success": False, "message": str(e)}
-
-#util function if you wish to acces this later
-@app.post("/get_schema/")
-def getschema(request: ValidateRequest):
-    try:
-        metadata = METADATA_STORAGE[request.connection_string]
-        return {"success":True, "data": metadata.schema}
-    except:
-        return {"success": False, "message": "Failed to get schema"}
+    return execute_query(connection_string, query)
 
 class NLPRequest(BaseModel):
     description: str
     connection_string: Optional[str]
-    schema: Optional[Dict[str, TableSchema]]
+    local_schema: Optional[Dict[str, TableSchema]]
 
 @app.post("/nlp2sql")
 def getSQL(request: NLPRequest):
     description = request.description
     connection_string = request.connection_string
-    schema = request.schema
+    schema = request.local_schema
     if not schema:
-        schema = METADATA_STORAGE.get(connection_string)
-        if not schema:
-            return {"success": False, "message": "Try connecting to your database again"}
-        schema = schema.get("schema")
-    return get_sql(description, schema)
+        schema = get_db_metadata(connection_string).get("local_schema")
+    return get_sql(description, schema, connection_string)
 
 class DocsRequest(BaseModel):
     connection_string: Optional[str]
-    schema: Optional[Dict[str, TableSchema]]
+    local_schema: Optional[Dict[str, TableSchema]]
 
 @app.post("/docs")
 def genDocs(request: DocsRequest):
     connection_string = request.connection_string
-    schema = request.schema
+    schema = request.local_schema
     if not connection_string and not schema:
         return {"success": False, "message": "Field connection_string or schema is missing"}
     #need some better edge case handling here in case metadata.get() returns None
-    return gen_docs(schema or METADATA_STORAGE.get(connection_string).get("schema"))
+    return gen_docs(schema or get_db_metadata(connection_string).get("local_schema"))
 
 class ChatRequest(BaseModel):
     userInput: str
@@ -144,7 +105,7 @@ def getReply(request: ChatRequest):
         metadata = metadata.model_dump()
     if not connection_string and not metadata:
         return {"success": False, "message":"Not enough data"}
-    return get_reply(userInput, query, metadata or METADATA_STORAGE.get(connection_string))
+    return get_reply(userInput, query, metadata or get_db_metadata(connection_string))
 
 @app.post("/graph")
 def getGraph(request: ChatRequest):
@@ -157,21 +118,4 @@ def getGraph(request: ChatRequest):
         metadata = metadata.model_dump()
     if not connection_string and not metadata:
         return {"success": False, "message":"Not enough data"}
-    try:
-        engine = get_engine(connection_string)
-        with engine.connect() as connection:  # Ensure proper connection handling
-            return get_graph(userInput, query, metadata or METADATA_STORAGE.get(connection_string), connection)
-    except SQLAlchemyError as e:
-        return {"success": False, "message": str(e)}
-
-#need to test this what does bro even do
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator:
-    yield
-    logging.info("Shutting down, closing all database connections...")
-    for conn_str, engine in ENGINE_CACHE.items():
-        logging.info(f"Closing connection for {conn_str}")
-        engine.dispose()
-    ENGINE_CACHE.clear()
-
-app.router.lifespan_context = lifespan
+    return get_graph(userInput, query, metadata or get_db_metadata(connection_string), connection_string)

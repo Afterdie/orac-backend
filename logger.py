@@ -1,14 +1,12 @@
 import time
-import sqlglot
 from sqlglot import parse, parse_one, expressions
+
+QUERY_LOG = {}
 
 def before_execute(conn, _clauseelement, _multiparams, _params):
     conn.info["query_start_time"] = time.time()
 
 def after_execute(conn, clauseelement, _multiparams, _params, _result):
-    #i should remove this later i think
-    from main import QUERY_LOG  # Avoid circular imports at the top level
-
     elapsed = time.time() - conn.info["query_start_time"]
     query_text = str(clauseelement).strip().rstrip(";")  # Normalize query string
 
@@ -16,7 +14,7 @@ def after_execute(conn, clauseelement, _multiparams, _params, _result):
     try:
         queries = [q.sql() for q in parse(query_text)]
     except Exception as e:
-        print(f"SQL Parsing Error: {e}")
+        #print(f"SQL Parsing Error: {e}")
         queries = [query_text]
 
     for query in queries:
@@ -25,7 +23,7 @@ def after_execute(conn, clauseelement, _multiparams, _params, _result):
         try:
             where_cols, join_cols, order_by_cols = extract_columns(query)
         except Exception as e:
-            print(f"Failed to parse query columns: {e}")
+            #print(f"Failed to parse query columns: {e}")
             where_cols, join_cols, order_by_cols = [], [], []
 
         if query_hash not in QUERY_LOG:
@@ -41,14 +39,14 @@ def after_execute(conn, clauseelement, _multiparams, _params, _result):
             QUERY_LOG[query_hash]["execution_time"] += elapsed
             QUERY_LOG[query_hash]["frequency"] += 1
         #debugging
-        print(QUERY_LOG[query_hash])
+        #print(QUERY_LOG[query_hash])
 
 def extract_columns(query):
     try:
         #keep in mind parse/parse_one fn returns a syntax tree
         parsed = parse_one(query)
     except Exception as e:
-        print(f"SQL Parsing Error in extract_columns: {e}")
+        #print(f"SQL Parsing Error in extract_columns: {e}")
         return [], [], []
 
     where_columns = list({

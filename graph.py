@@ -10,9 +10,8 @@ class GraphResponse:
     query: str
     type: str
 
-def get_graph(userInput: str, query: Optional[str], metadata: Metadata, connection: Connection) -> Dict[str, Any]:
+def get_graph(userInput: str, query: Optional[str], metadata: Metadata, connection_string: str) -> Dict[str, Any]:
     metadata = json.dumps(metadata, indent=2)
-    print(metadata)
     structure = {
         "message": "<Brief explanation of the query>",
         "query": "<Generated SQL query>",
@@ -81,21 +80,21 @@ def get_graph(userInput: str, query: Optional[str], metadata: Metadata, connecti
         result = result.strip().strip("`")
         if result.startswith("json"):
             result = result[4:].strip()
-        print("FIRST RES",result)
+        #print("FIRST RES",result)
         cleaned_json = json.loads(result)
         message = cleaned_json["message"]
         query = cleaned_json["query"]
         type = cleaned_json["type"]
 
-        rows = execute_query(connection, query)
-        print("ROWS:",rows)
+        rows = execute_query(connection_string, query)
+        #print("ROWS:",rows)
         if rows["success"]:
             data = {
                 "message": message,
                 "graph": type,
                 "chartData": rows["data"]
             }
-            print(data)
+            #print(data)
             return {"success": True, "data": data}
         else: 
             return {"success": False, "message": "Something went wrong"}
