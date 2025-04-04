@@ -3,33 +3,51 @@ from schema import TableSchema
 from aiAPI import generateResponse
 from execute import execute_query
 # fallback method to ensure the returned query is syntactically correct
+def is_select_query(query: str) -> bool:
+    return query.strip().lower().startswith("select")
+
+def wrap_in_safe_subquery(query: str) -> str:
+    query = query.strip().rstrip(";")
+    return f"SELECT * FROM (\n{query}\n) AS sub WHERE 1=2"
+
 def verify_query(connection_string: str, query: str):
-    paddedQuery = query+" AND 1=2"
-    print(paddedQuery)
-    validity = execute_query(connection_string, paddedQuery)
-    print(validity)
-    if validity["success"] is True:
-        #query is valid
-        return { "success": True, "data": query}
-    
+    if not query or not isinstance(query, str):
+        return {"success": False, "message": "Invalid query passed for verification."}
+
+    # Wrap only if it's a SELECT query
+    if is_select_query(query):
+        safe_query = wrap_in_safe_subquery(query)
+    else:
+        safe_query = query  # Let it run as-is, probably will fail if invalid
+
+    validity = execute_query(connection_string, safe_query)
+
+    if validity.get("success") is True:
+        return {"success": True, "data": query}
+
+    # Fall back to GPT correction if query failed
     prompt = f"""
-    You are an AI specialized in correcting sql queries provided you.
-    Input Query:
+    You are an AI specialized in correcting SQL queries.
+
+    Rules:
+    - Use standard SQL syntax
+    - ONLY return a valid SQL query. No comments, markdown, or explanation.
+    - Fix syntax ONLY — do not alter table or column names.
+
+    Input SQL:
     {query}
-
-    Make sure the provided query has no syntax errors and return a valid SQL query. Only fix syntax do not attempt to correct the names of tables, conditions or other variables.
     """
-    try:
-        result = generateResponse(prompt).text
-        result = result.strip().strip("`")
 
-        if result.startswith("sql"):
+    try:
+        result = generateResponse(prompt).text.strip().strip("`")
+
+        if result.lower().startswith("sql"):
             result = result[4:].strip()
-        
+
         return {"success": True, "data": result}
 
     except Exception as e:
-        return {"success": False, "message": f"Failed to generate SQL: {str(e)}"}
+        return {"success": False, "message": f"Failed to generate SQL: {str(e)}"}    
 
 def get_sql(description: str, schema: Dict[str, TableSchema], connection_string: str):
     prompt = f"""
@@ -57,7 +75,7 @@ def get_sql(description: str, schema: Dict[str, TableSchema], connection_string:
         if result.startswith("sql"):
             result = result[4:].strip()
         
-        return {"success": True, "data": result}
+        return verify_query(connection_string, result)
 
     except Exception as e:
         return {"success": False, "message": f"Failed to generate SQL: {str(e)}"}
