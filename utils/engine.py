@@ -4,11 +4,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from utils.schema import Metadata
 from utils.logger import after_execute, before_execute
 
+from utils.semantic import EmbeddingStore
+
+
 # Temporary database
 ENGINE_CACHE: Dict[str, Engine] = {}
 METADATA_STORAGE: Dict[str, Metadata] = {}
 
 def validate_connection(connection_string: str):
+    store = EmbeddingStore.get_instance()
     try:
         engine = get_engine(connection_string)
 
@@ -18,6 +22,15 @@ def validate_connection(connection_string: str):
             #includes the schema of the table and the extra stats
             metadata = get_db_metadata(connection_string)
             METADATA_STORAGE[connection_string] = metadata
+            
+            # pass the connection string to create embeddings, cardinality threhold decides which columns get embeddings
+            # 500 embeddings for a row is ok amount to get the embedding count simply multiply the cardinality with the row count so 0.05*10000 would mean 500 values
+
+            # higher threshold means no correction for majority of the columns and too low and you make the application slow and overflow the memory since stored in the cache
+            store.generate_embeddings(engine, connection_string, metadata, 0.4)
+            # developmental
+            # store.printCache()
+
             #binding after schema because it runs a huge query and it sends through a wall of text QOL change 
             event.listen(engine, "before_execute", before_execute)
             event.listen(engine, "after_execute", after_execute)
@@ -32,19 +45,6 @@ def get_engine(connection_string: str):
         engine = create_engine(connection_string, pool_size=5, max_overflow=10)
         ENGINE_CACHE[connection_string] = engine
     return ENGINE_CACHE[connection_string]
-
-# #need to test this what does bro even do
-# @asynccontextmanager
-# async def lifespan(app: FastAPI) -> AsyncGenerator:
-#     yield
-#     logging.info("Shutting down, closing all database connections...")
-#     for conn_str, engine in ENGINE_CACHE.items():
-#         logging.info(f"Closing connection for {conn_str}")
-#         engine.dispose()
-#     ENGINE_CACHE.clear()
-
-# app.router.lifespan_context = lifespan
-
 
 #metadata is schema + stats
 def get_db_metadata(connection_string: str) -> Metadata:
@@ -123,3 +123,8 @@ def get_stats(engine, table_name):
             print(f"Error fetching stats for {table_name}: {e}")
 
     return stats
+
+def dispose_all_engines():
+    for _, engine in ENGINE_CACHE.items():
+        engine.dispose()
+    ENGINE_CACHE.clear()

@@ -1,12 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Optional
+import logging
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator, Dict, Optional
 import os
 from dotenv import load_dotenv
 
 from utils.schema import Metadata, TableSchema
-from utils.engine import validate_connection, get_engine, get_db_metadata
+from utils.engine import validate_connection, dispose_all_engines, get_db_metadata
 
 from routes.execute import execute_query
 from routes.nlp2sql import get_sql
@@ -120,3 +122,14 @@ def getGraph(request: ChatRequest):
     if not connection_string and not metadata:
         return {"success": False, "message":"Not enough data"}
     return get_graph(userInput, query, metadata or get_db_metadata(connection_string), connection_string)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator:
+    yield
+    try:
+        logging.info("Shutting down, closing all database connections...")
+        dispose_all_engines()
+    except Exception as e:
+        logging.exception("Failed during shutdown: %s", str(e))
+
+app.router.lifespan_context = lifespan
