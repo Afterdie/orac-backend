@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, text, Engine, inspect, event
 from sqlalchemy.exc import SQLAlchemyError
 from utils.schema import Metadata
 from utils.logger import after_execute, before_execute
-
+import time
 from utils.semantic import EmbeddingStore
 
 
@@ -12,6 +12,7 @@ ENGINE_CACHE: Dict[str, Engine] = {}
 METADATA_STORAGE: Dict[str, Metadata] = {}
 
 def validate_connection(connection_string: str):
+    start_time = time.perf_counter()
     store = EmbeddingStore.get_instance()
     try:
         engine = get_engine(connection_string)
@@ -27,14 +28,14 @@ def validate_connection(connection_string: str):
             # 500 embeddings for a row is ok amount to get the embedding count simply multiply the cardinality with the row count so 0.05*10000 would mean 500 values
 
             # higher threshold means no correction for majority of the columns and too low and you make the application slow and overflow the memory since stored in the cache
-            #store.generate_embeddings(engine, connection_string, metadata, 0.4)
+            store.generate_embeddings(engine, connection_string, metadata, 0.4)
             # developmental
             # store.printCache()
 
             #binding after schema because it runs a huge query and it sends through a wall of text QOL change 
             event.listen(engine, "before_execute", before_execute)
             event.listen(engine, "after_execute", after_execute)
-
+            print(time.perf_counter()-start_time)
         return {"success": True, "data": metadata}
     except SQLAlchemyError as e:
         return {"success": False, "message": str(e)}
