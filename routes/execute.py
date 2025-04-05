@@ -1,7 +1,7 @@
 import time
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
-from engine import get_engine
+from utils.engine import get_engine
 
 def execute_query(connection_string: str, query: str):
     try:

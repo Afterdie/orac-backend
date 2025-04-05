@@ -1,17 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel
 from typing import Dict, Optional
-from execute import execute_query
-from nlp2sql import get_sql
-from engine import validate_connection, get_engine, get_db_metadata
-from docs import gen_docs
-from chat import get_reply
-from graph import get_graph
-from schema import Metadata, TableSchema
 import os
 from dotenv import load_dotenv
+
+from utils.schema import Metadata, TableSchema
+from utils.engine import validate_connection, get_engine, get_db_metadata
+
+from routes.execute import execute_query
+from routes.nlp2sql import get_sql
+from routes.docs import gen_docs
+from routes.chat import get_reply
+from routes.graph import get_graph
 
 load_dotenv()
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"

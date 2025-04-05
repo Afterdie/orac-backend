@@ -1,7 +1,7 @@
 from typing import Dict
-from schema import TableSchema
-from aiAPI import generateResponse
-from execute import execute_query
+from utils.schema import TableSchema
+from utils.aiAPI import generateResponse
+from routes.execute import execute_query
 # fallback method to ensure the returned query is syntactically correct
 def is_select_query(query: str) -> bool:
     return query.strip().lower().startswith("select")

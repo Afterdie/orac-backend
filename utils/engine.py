@@ -1,8 +1,8 @@
 from typing import Dict
 from sqlalchemy import create_engine, text, Engine, inspect, event
 from sqlalchemy.exc import SQLAlchemyError
-from schema import Metadata
-from logger import after_execute, before_execute
+from utils.schema import Metadata
+from utils.logger import after_execute, before_execute
 
 # Temporary database
 ENGINE_CACHE: Dict[str, Engine] = {}

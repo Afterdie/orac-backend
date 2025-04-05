@@ -1,9 +1,8 @@
 from typing import Optional, Dict, Any
 import json
-from aiAPI import generateResponse
-from schema import Metadata
-from execute import execute_query
-from sqlalchemy import Connection
+from utils.aiAPI import generateResponse
+from utils.schema import Metadata
+from routes.execute import execute_query
 
 class GraphResponse:
     message: str

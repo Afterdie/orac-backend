@@ -1,7 +1,7 @@
 from typing import Dict
 import json
-from schema import TableSchema
-from aiAPI import generateResponse
+from utils.schema import TableSchema
+from utils.aiAPI import generateResponse
 
 #schema_types = get_types()
 #available block types

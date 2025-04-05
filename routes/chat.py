@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any
 import json
-from aiAPI import generateResponse
-from schema import Metadata
+from utils.aiAPI import generateResponse
+from utils.schema import Metadata
 
 def get_reply(userInput: str, query: Optional[str], metadata: Metadata) -> Dict[str, Any]:
     metadata = json.dumps(metadata, indent=2)
