@@ -27,7 +27,7 @@ def validate_connection(connection_string: str):
             # 500 embeddings for a row is ok amount to get the embedding count simply multiply the cardinality with the row count so 0.05*10000 would mean 500 values
 
             # higher threshold means no correction for majority of the columns and too low and you make the application slow and overflow the memory since stored in the cache
-            store.generate_embeddings(engine, connection_string, metadata, 0.4)
+            #store.generate_embeddings(engine, connection_string, metadata, 0.4)
             # developmental
             # store.printCache()
 

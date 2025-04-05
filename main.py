@@ -36,12 +36,12 @@ app.add_middleware(
 class ValidateRequest(BaseModel):
     connection_string: str
 
-@app.post("/health")
+@app.get("/health")
 def health():
     return {"message":"working and stuff"}
 
 @app.post("/validate_connection/")
-def validateConnection(request: ValidateRequest):
+async def validateConnection(request: ValidateRequest):
 
     connection_string = request.connection_string
     if not connection_string:
@@ -55,7 +55,7 @@ class QueryRequest(BaseModel):
 
 #move this to its own file later
 @app.post("/execute_query/")
-def executeQuery(request: QueryRequest):
+async def executeQuery(request: QueryRequest):
     connection_string = request.connection_string
     query = request.query
 
@@ -70,7 +70,7 @@ class NLPRequest(BaseModel):
     local_schema: Optional[Dict[str, TableSchema]]
 
 @app.post("/nlp2sql")
-def getSQL(request: NLPRequest):
+async def getSQL(request: NLPRequest):
     description = request.description
     connection_string = request.connection_string
     schema = request.local_schema
@@ -83,7 +83,7 @@ class DocsRequest(BaseModel):
     local_schema: Optional[Dict[str, TableSchema]]
 
 @app.post("/docs")
-def genDocs(request: DocsRequest):
+async def genDocs(request: DocsRequest):
     connection_string = request.connection_string
     schema = request.local_schema
     if not connection_string and not schema:
@@ -98,7 +98,7 @@ class ChatRequest(BaseModel):
     metadata: Optional[Metadata]
 
 @app.post("/chat")
-def getReply(request: ChatRequest):
+async def getReply(request: ChatRequest):
     userInput = request.userInput
     query = request.query
     connection_string = request.connection_string
@@ -111,7 +111,7 @@ def getReply(request: ChatRequest):
     return get_reply(userInput, query, metadata or get_db_metadata(connection_string))
 
 @app.post("/graph")
-def getGraph(request: ChatRequest):
+async def getGraph(request: ChatRequest):
     userInput = request.userInput
     query = request.query
     connection_string = request.connection_string
