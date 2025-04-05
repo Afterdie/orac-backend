@@ -3,11 +3,13 @@ from typing import Dict, List
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import text
-from sqlalchemy.engine import Engine
+
+from utils.engine import get_engine, get_db_metadata
+from utils.schema import Metadata
 
 #chatgpt suggest hashing the connection str which makes sense implement that everywhere else
 
-class InMemoryEmbeddingStore:
+class EmbeddingStore:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         self.model = SentenceTransformer(model_name)
         # Structure: {conn_hash: { "table.col": {value_hash: {value, embedding}}}}
@@ -16,11 +18,11 @@ class InMemoryEmbeddingStore:
     def _hash(self, text: str) -> str:
         return hashlib.sha256(text.encode()).hexdigest()
 
-    def _conn_key(self, conn_str: str) -> str:
-        return self._hash(conn_str)
+    def _conn_key(self, connection_string: str) -> str:
+        return self._hash(connection_string)
 
-    def add_value(self, conn_str: str, table: str, column: str, value: str):
-        conn_key = self._conn_key(conn_str)
+    def add_value(self, connection_string: str, table: str, column: str, value: str):
+        conn_key = self._conn_key(connection_string)
         col_key = f"{table}.{column}"
         value_hash = self._hash(value)
 
@@ -33,14 +35,15 @@ class InMemoryEmbeddingStore:
                 "embedding": embedding
             }
 
-    def get_embeddings(self, conn_str: str, table: str, column: str) -> List[Dict]:
-        conn_key = self._conn_key(conn_str)
+    # gets the embeddings for given column
+    def get_embeddings(self, connection_string: str, table: str, column: str) -> List[Dict]:
+        conn_key = self._conn_key(connection_string)
         col_key = f"{table}.{column}"
         return list(self.cache.get(conn_key, {}).get(col_key, {}).values())
 
-    def similarity_search(self, conn_str: str, table: str, column: str, query: str, threshold: float = 0.8) -> str:
+    def similarity_search(self, connection_string: str, table: str, column: str, query: str, threshold: float = 0.8) -> str:
         query_vec = self.model.encode(query)
-        candidates = self.get_embeddings(conn_str, table, column)
+        candidates = self.get_embeddings(connection_string, table, column)
 
         if not candidates:
             return query  # fallback
@@ -59,9 +62,23 @@ class InMemoryEmbeddingStore:
 
         return best_match if best_score >= threshold else query
 
-    def generate_from_metadata(self, conn_str: str, metadata: Dict, engine: Engine, cardinality_threshold: float = 0.6):
-        schema = metadata["data"]["schema"]
-        stats = metadata["data"]["stats"]
+    # accept the connection string, metadata for getting the row count and cardinality to determine whether worth storing or not, 
+
+    #gets the row count and sets a limit dynamically
+    def generate_from_metadata(self, connection_string: str, cardinality_threshold: float = 0.6):
+        metadata = get_db_metadata(connection_string)
+        engine = get_engine(connection_string)
+
+        #handle this better raise a http exception llater
+        if not metadata or not engine:
+            return
+        
+        schema = metadata.get("local_schema")
+        stats = metadata.get("stats")
+
+        #handle this better also 
+        if not schema or not stats:
+            return 
 
         for table, table_data in schema.items():
             for col in table_data["columns"]:
@@ -71,20 +88,27 @@ class InMemoryEmbeddingStore:
                 if not self._is_text_type(col_type):
                     continue
 
-                cardinality = stats.get(table, {}).get("cardinality", {}).get(col_name, 1.0)
+                col_stats = stats.get(table, {})
+                cardinality = col_stats.get("cardinality", {}).get(col_name, 1.0)
+                row_count = col_stats.get("row_count", 0)
+
                 if cardinality > cardinality_threshold:
                     continue
+
+                # Dynamically set limit: allow 5% of rows or max 500
+                limit = min(500, max(10, int(row_count * cardinality)))
 
                 with engine.connect() as conn:
                     try:
                         result = conn.execute(text(
-                            f"SELECT DISTINCT {col_name} FROM {table} WHERE {col_name} IS NOT NULL LIMIT 500"
+                            f"SELECT DISTINCT {col_name} FROM {table} WHERE {col_name} IS NOT NULL LIMIT {limit}"
                         ))
                         for row in result:
                             value = str(row[0])
-                            self.add_value(conn_str, table, col_name, value)
+                            self.add_value(connection_string, table, col_name, value)
                     except Exception as e:
                         print(f"[embedding] Failed {table}.{col_name}: {e}")
+
 
     def _is_text_type(self, col_type: str) -> bool:
         return any(t in col_type for t in ["text", "char", "varchar", "string"])
