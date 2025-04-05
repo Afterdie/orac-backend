@@ -1,4 +1,5 @@
 import time
+from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 from utils.engine import get_engine
@@ -25,8 +26,6 @@ def patch_query_with_semantics(connection_string: str, query: str) -> str:
 
                 if not isinstance(value, str):
                     continue
-                print(store.printCache())
-                print(store.has_value(connection_string, table, column, value))
                 # Check semantic cache
                 if not store.has_value(connection_string, table, column, value):
                     new_val = store.semantic_search(connection_string, table, column, value)
@@ -39,10 +38,7 @@ def patch_query_with_semantics(connection_string: str, query: str) -> str:
 def execute_query(connection_string: str, query: str):
     try:
         engine = get_engine(connection_string)
-        print(query)
-        # Patch all statements
         patched_query = patch_query_with_semantics(connection_string, query)
-        print(patched_query)
         with engine.connect() as connection:
             with connection.begin():
                 start_time = time.perf_counter()
@@ -51,9 +47,11 @@ def execute_query(connection_string: str, query: str):
 
                 if result.returns_rows:
                     data = [dict(row) for row in result.mappings()]
-                    return {"success": True, "data": data, "duration": duration}
+                    return {"success": True, "data": data, "duration": duration, "query": patched_query}
 
-                return {"success": True, "message": "Query executed successfully", "duration": duration}
+                return {"success": True, "message": "Query executed successfully", "duration": duration, "query": patched_query}
 
     except SQLAlchemyError as e:
-        return {"success": False, "message": str(e)}
+        raise HTTPException(status_code=400, detail=f"Invalid SQL generated: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Execution error: {str(e)}")
