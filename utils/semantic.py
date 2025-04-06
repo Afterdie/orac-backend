@@ -6,17 +6,18 @@ from sqlalchemy import text, Engine
 
 from utils.schema import Metadata
 import logging
-
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
 class EmbeddingStore:
     _instance = None
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self):
         if EmbeddingStore._instance is not None:
             raise Exception("Use EmbeddingStore.get_instance() to access the singleton.")
         logging.basicConfig(level=logging.DEBUG)
         print("Before model load")
-        self.model = SentenceTransformer(model_name)
+        self.model = SentenceTransformer(os.getenv("MODELPATH"))
         print("After model load")
         # Structure: {conn_hash: { "table.col": {value_hash: {value, embedding}}}}
         self.cache: Dict[str, Dict[str, Dict[str, Dict[str, np.ndarray]]]] = {}
