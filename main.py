@@ -40,7 +40,7 @@ class ValidateRequest(BaseModel):
 def health():
     return {"message":"working and stuff"}
 
-@app.post("/validate_connection/")
+@app.post("/validate_connection")
 async def validateConnection(request: ValidateRequest):
 
     connection_string = request.connection_string
@@ -54,7 +54,7 @@ class QueryRequest(BaseModel):
     query: str
 
 #move this to its own file later
-@app.post("/execute_query/")
+@app.post("/execute_query")
 async def executeQuery(request: QueryRequest):
     connection_string = request.connection_string
     query = request.query

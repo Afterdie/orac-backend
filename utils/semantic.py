@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer
 from sqlalchemy import text, Engine
 
 from utils.schema import Metadata
+import logging
 
 
 class EmbeddingStore:
@@ -13,8 +14,10 @@ class EmbeddingStore:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         if EmbeddingStore._instance is not None:
             raise Exception("Use EmbeddingStore.get_instance() to access the singleton.")
-        
+        logging.basicConfig(level=logging.DEBUG)
+        print("Before model load")
         self.model = SentenceTransformer(model_name)
+        print("After model load")
         # Structure: {conn_hash: { "table.col": {value_hash: {value, embedding}}}}
         self.cache: Dict[str, Dict[str, Dict[str, Dict[str, np.ndarray]]]] = {}
 
